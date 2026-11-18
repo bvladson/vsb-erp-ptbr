@@ -1,0 +1,268 @@
+{#-
+	VSB SOLUÇÕES TÉCNICAS — RODAPÉ DO PAPEL TIMBRADO
+	Letter Head "VSB TEMPLET - PERSONALIZADO", rodapé (campo Footer).
+
+	Correções feitas em 30/09/2026:
+	1. A paginação só aparece no PDF. Quem preenche "Página 1 / 3" é o
+	   wkhtmltopdf, e isso só acontece ao gerar o PDF; na tela de impressão
+	   o Frappe mostra o rodapé e saía "PÁGINA  /" vazio. Agora o bloco está
+	   dentro de um elemento .visible-pdf: oculto na tela, revelado no PDF
+	   (frappe/utils/pdf.py remove essa classe ao gerar).
+	2. A faixa cobre saiu do position:absolute e virou célula de tabela, que é
+	   o que o wkhtmltopdf renderiza de forma previsível no rodapé.
+	3. As classes da paginação ganharam prefixo do rodapé. Com nomes genéricos,
+	   o formato de impressão podia redefini-las sem querer e mudar o tamanho e
+	   a cor da paginação.
+	   As classes "page" e "topage" precisam ficar como estão: são o que o
+	   wkhtmltopdf procura para escrever os números.
+	4. Nome da empresa escapado: o Jinja do Frappe não tem autoescape.
+	5. Saiu uma regra de impressão que anulava uma sombra que não existia.
+-#}
+
+<style>
+	/* ======================================================
+	   VSB SOLUÇÕES TÉCNICAS — RODAPÉ
+	   ====================================================== */
+
+	.vsb-footer {
+		width: 100%;
+		margin: 0;
+		padding: 0;
+		font-family: Arial, Helvetica, sans-serif;
+		color: #505f62;
+	}
+
+	/* Faixa azul com o trecho cobre à esquerda, em células de tabela. */
+	.vsb-footer-line {
+		width: 100%;
+		border-collapse: collapse;
+		table-layout: fixed;
+	}
+
+	.vsb-footer-line td {
+		height: 4px;
+		line-height: 4px;
+		font-size: 0;
+		padding: 0 !important;
+		border: none !important;
+	}
+
+	.vsb-footer-line-accent {
+		width: 90px;
+		background: #b0774c;
+	}
+
+	.vsb-footer-line-rest {
+		background: #063c51;
+	}
+
+	.vsb-footer-content {
+		padding: 8px 12px 0 12px;
+	}
+
+	.vsb-footer-table {
+		width: 100%;
+		border-collapse: collapse;
+		table-layout: fixed;
+	}
+
+	.vsb-footer-table td {
+		padding: 0;
+		vertical-align: middle;
+		border: none !important;
+	}
+
+	/* =========================
+	   EMPRESA
+	   ========================= */
+
+	.vsb-footer-company {
+		width: 36%;
+		text-align: left;
+	}
+
+	/*
+	 * Minilogo no lugar do nome escrito; o nome só entra se não houver logo cadastrada.
+	 * 26px é o limite útil: o arquivo da logo inclui a assinatura "SOLUÇÕES TÉCNICAS",
+	 * que abaixo disso vira um borrão. Acima, o rodapé cresce e come área do documento.
+	 */
+	.vsb-footer-logo {
+		display: block;
+		width: auto;
+		max-width: 132px;
+		max-height: 26px;
+	}
+
+	.vsb-footer-company-name {
+		font-size: 8.5px;
+		font-weight: 700;
+		color: #063c51;
+		line-height: 1.35;
+	}
+
+	.vsb-footer-tax {
+		font-size: 7.5px;
+		color: #7b8589;
+		margin-top: 2px;
+		line-height: 1.35;
+	}
+
+	/* =========================
+	   CONTATOS
+	   ========================= */
+
+	.vsb-footer-contact {
+		width: 44%;
+		text-align: center;
+		font-size: 7.5px;
+		color: #5d686c;
+		line-height: 1.5;
+	}
+
+	.vsb-footer-contact-item {
+		display: inline-block;
+		margin: 0 5px;
+	}
+
+	/*
+	 * O espaço entre o rótulo e o valor é um &nbsp; de verdade no HTML, não só esta
+	 * margem: com margem sozinha o texto copiado saía colado ("WEBvsbseguranca.com.br"),
+	 * e o mesmo acontecia ao extrair o texto do PDF.
+	 */
+	.vsb-footer-contact-label {
+		color: #9a6b49;
+		font-weight: 700;
+		letter-spacing: 0.4px;
+		margin-right: 3px;
+	}
+
+	/* =========================
+	   PAGINAÇÃO (só no PDF)
+	   ========================= */
+
+	.vsb-footer-page {
+		width: 20%;
+		text-align: right;
+	}
+
+	.vsb-footer-page-label {
+		font-size: 7px;
+		color: #8b9497;
+		text-transform: uppercase;
+		letter-spacing: 0.6px;
+	}
+
+	.vsb-footer-page-number {
+		font-size: 9px;
+		font-weight: 700;
+		color: #063c51;
+		margin-top: 2px;
+	}
+
+	/* =========================
+	   MENSAGEM
+	   ========================= */
+
+	.vsb-footer-note {
+		margin-top: 6px;
+		padding-top: 5px;
+		border-top: 1px solid #e5eaec;
+		text-align: center;
+		font-size: 6.8px;
+		color: #949da0;
+		line-height: 1.4;
+	}
+</style>
+
+{%- set footer_company = frappe.db.get_value(
+	"Company",
+	doc.company,
+	["company_logo", "website", "email", "phone_no", "tax_id"],
+	as_dict=True
+) -%}
+
+<div class="vsb-footer">
+
+	<!-- FAIXA SUPERIOR -->
+	<table class="vsb-footer-line">
+		<tbody>
+			<tr>
+				<td class="vsb-footer-line-accent">&nbsp;</td>
+				<td class="vsb-footer-line-rest">&nbsp;</td>
+			</tr>
+		</tbody>
+	</table>
+
+	<div class="vsb-footer-content">
+
+		<table class="vsb-footer-table">
+			<tbody>
+				<tr>
+
+					<!-- EMPRESA: minilogo, ou o nome escrito se não houver logo cadastrada -->
+					<td class="vsb-footer-company">
+
+						{% if footer_company and footer_company.company_logo %}
+						<img
+							class="vsb-footer-logo"
+							src="{{ frappe.utils.get_url(footer_company.company_logo) | replace(' ', '%20') }}"
+							alt="{{ doc.company | e }}"
+						>
+						{% else %}
+						<div class="vsb-footer-company-name">
+							{{ doc.company | e }}
+						</div>
+						{% endif %}
+
+						{% if footer_company and footer_company.tax_id %}
+						<div class="vsb-footer-tax">
+							CNPJ: {{ footer_company.tax_id }}
+						</div>
+						{% endif %}
+
+					</td>
+
+					<!-- CONTATOS -->
+					<td class="vsb-footer-contact">
+
+						{% if footer_company and footer_company.website %}
+						<span class="vsb-footer-contact-item">
+							<span class="vsb-footer-contact-label">WEB</span>&nbsp;{{ footer_company.website }}
+						</span>
+						{% endif %}
+
+						{% if footer_company and footer_company.email %}
+						<span class="vsb-footer-contact-item">
+							<span class="vsb-footer-contact-label">E-MAIL</span>&nbsp;{{ footer_company.email }}
+						</span>
+						{% endif %}
+
+						{% if footer_company and footer_company.phone_no %}
+						<span class="vsb-footer-contact-item">
+							<span class="vsb-footer-contact-label">TEL</span>&nbsp;{{ footer_company.phone_no }}
+						</span>
+						{% endif %}
+
+					</td>
+
+					<!-- PAGINAÇÃO: só no PDF, ver observação 1 -->
+					<td class="vsb-footer-page">
+						<div class="visible-pdf">
+							<div class="vsb-footer-page-label">Página</div>
+							<div class="vsb-footer-page-number">
+								<span class="page"></span>&nbsp;/&nbsp;<span class="topage"></span>
+							</div>
+						</div>
+					</td>
+
+				</tr>
+			</tbody>
+		</table>
+
+		<div class="vsb-footer-note">
+			Documento gerado eletronicamente pelo sistema de gestão da VSB Soluções Técnicas.
+		</div>
+
+	</div>
+
+</div>

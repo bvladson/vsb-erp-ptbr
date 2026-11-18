@@ -1,0 +1,242 @@
+<style>
+	/* ======================================================
+	   VSB SOLUÇÕES TÉCNICAS — FOOTER
+	   ====================================================== */
+
+	.vsb-footer {
+		width: 100%;
+		margin: 0;
+		padding: 0;
+		font-family: Arial, Helvetica, sans-serif;
+		color: #505f62;
+	}
+
+	.vsb-footer-line {
+		width: 100%;
+		height: 4px;
+		background: #063c51;
+		position: relative;
+	}
+
+	.vsb-footer-accent {
+		width: 90px;
+		height: 4px;
+		background: #b0774c;
+		position: absolute;
+		top: 0;
+		left: 0;
+	}
+
+	.vsb-footer-content {
+		padding: 8px 12px 0 12px;
+	}
+
+	.vsb-footer-table {
+		width: 100%;
+		border-collapse: collapse;
+		table-layout: fixed;
+	}
+
+	.vsb-footer-table td {
+		padding: 0;
+		vertical-align: middle;
+		border: none !important;
+	}
+
+	/* =========================
+	   EMPRESA
+	   ========================= */
+
+	.vsb-footer-company {
+		width: 36%;
+		text-align: left;
+	}
+
+	.vsb-footer-company-name {
+		font-size: 8.5px;
+		font-weight: 700;
+		color: #063c51;
+		line-height: 1.35;
+	}
+
+	.vsb-footer-tax {
+		font-size: 7.5px;
+		color: #7b8589;
+		margin-top: 2px;
+		line-height: 1.35;
+	}
+
+	/* =========================
+	   CONTATOS
+	   ========================= */
+
+	.vsb-footer-contact {
+		width: 44%;
+		text-align: center;
+		font-size: 7.5px;
+		color: #5d686c;
+		line-height: 1.5;
+	}
+
+	.vsb-footer-contact-item {
+		display: inline-block;
+		margin: 0 5px;
+	}
+
+	.vsb-footer-contact-label {
+		color: #9a6b49;
+		font-weight: 700;
+	}
+
+	/* =========================
+	   PAGINAÇÃO
+	   ========================= */
+
+	.vsb-footer-page {
+		width: 20%;
+		text-align: right;
+	}
+
+	.vsb-page-label {
+		font-size: 7px;
+		color: #8b9497;
+		text-transform: uppercase;
+		letter-spacing: 0.6px;
+	}
+
+	.vsb-page-number {
+		font-size: 9px;
+		font-weight: 700;
+		color: #063c51;
+		margin-top: 2px;
+	}
+
+	/* =========================
+	   MENSAGEM
+	   ========================= */
+
+	.vsb-footer-note {
+		margin-top: 6px;
+		padding-top: 5px;
+		border-top: 1px solid #e5eaec;
+		text-align: center;
+		font-size: 6.8px;
+		color: #949da0;
+		line-height: 1.4;
+	}
+
+	@media print {
+
+		.vsb-footer {
+			box-shadow: none !important;
+		}
+
+	}
+</style>
+
+
+{% set footer_company = frappe.db.get_value(
+	"Company",
+	doc.company,
+	[
+		"website",
+		"email",
+		"phone_no",
+		"tax_id"
+	],
+	as_dict=True
+) %}
+
+
+<div class="vsb-footer">
+
+	<!-- LINHA SUPERIOR -->
+	<div class="vsb-footer-line">
+		<div class="vsb-footer-accent"></div>
+	</div>
+
+
+	<div class="vsb-footer-content">
+
+		<table class="vsb-footer-table">
+			<tbody>
+				<tr>
+
+					<!-- EMPRESA -->
+					<td class="vsb-footer-company">
+
+						<div class="vsb-footer-company-name">
+							{{ doc.company }}
+						</div>
+
+						{% if footer_company and footer_company.tax_id %}
+						<div class="vsb-footer-tax">
+							CNPJ: {{ footer_company.tax_id }}
+						</div>
+						{% endif %}
+
+					</td>
+
+
+					<!-- CONTATOS -->
+					<td class="vsb-footer-contact">
+
+						{% if footer_company and footer_company.website %}
+						<span class="vsb-footer-contact-item">
+							<span class="vsb-footer-contact-label">
+								WEB
+							</span>
+							{{ footer_company.website }}
+						</span>
+						{% endif %}
+
+
+						{% if footer_company and footer_company.email %}
+						<span class="vsb-footer-contact-item">
+							<span class="vsb-footer-contact-label">
+								E-MAIL
+							</span>
+							{{ footer_company.email }}
+						</span>
+						{% endif %}
+
+
+						{% if footer_company and footer_company.phone_no %}
+						<span class="vsb-footer-contact-item">
+							<span class="vsb-footer-contact-label">
+								TEL
+							</span>
+							{{ footer_company.phone_no }}
+						</span>
+						{% endif %}
+
+					</td>
+
+
+					<!-- PAGINAÇÃO -->
+					<td class="vsb-footer-page">
+
+						<div class="vsb-page-label">
+							Página
+						</div>
+
+						<div class="vsb-page-number">
+							<span class="page"></span>
+							&nbsp;/&nbsp;
+							<span class="topage"></span>
+						</div>
+
+					</td>
+
+				</tr>
+			</tbody>
+		</table>
+
+
+		<div class="vsb-footer-note">
+			Documento gerado eletronicamente pelo sistema de gestão da VSB Soluções Técnicas.
+		</div>
+
+	</div>
+
+</div>

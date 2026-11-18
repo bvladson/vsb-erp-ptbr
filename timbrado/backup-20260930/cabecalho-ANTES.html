@@ -1,0 +1,383 @@
+<style>
+	/* ======================================================
+	   VSB SOLUÇÕES TÉCNICAS — LETTERHEAD
+	   ====================================================== */
+
+	.letter-head {
+		margin: 0 12px 18px 12px !important;
+		padding: 0 !important;
+	}
+
+	.letter-head td {
+		padding: 0;
+	}
+
+	.vsb-header {
+		width: 100%;
+		background: #ffffff;
+		border: 1px solid #dce5e8;
+		border-top: 5px solid #063c51;
+		border-radius: 14px;
+		overflow: hidden;
+	}
+
+	.vsb-header-table {
+		width: 100%;
+		border-collapse: collapse;
+		table-layout: fixed;
+	}
+
+	/* =========================
+	   LOGO
+	   ========================= */
+
+	.vsb-logo-cell {
+		width: 28%;
+		padding: 18px 18px 18px 22px !important;
+		vertical-align: middle;
+	}
+
+	.vsb-logo {
+		width: 100%;
+		max-width: 190px;
+	}
+
+	.vsb-logo img {
+		display: block;
+		width: auto;
+		max-width: 190px;
+		max-height: 72px;
+		object-fit: contain;
+	}
+
+	/* =========================
+	   DADOS DA EMPRESA
+	   ========================= */
+
+	.vsb-company-cell {
+		width: 39%;
+		padding: 17px 20px !important;
+		vertical-align: middle;
+		border-left: 1px solid #e7edef;
+	}
+
+	.vsb-company-name {
+		color: #063c51;
+		font-size: 16px;
+		font-weight: 700;
+		line-height: 1.25;
+		margin-bottom: 7px;
+	}
+
+	.vsb-company-address {
+		color: #505f62;
+		font-size: 10px;
+		line-height: 1.55;
+	}
+
+	.vsb-company-tax {
+		margin-top: 5px;
+		color: #505f62;
+		font-size: 9.5px;
+	}
+
+	/* =========================
+	   DOCUMENTO
+	   ========================= */
+
+	.vsb-document-cell {
+		width: 33%;
+		background: #f4f7f8;
+		padding: 16px 20px !important;
+		vertical-align: middle;
+		border-left: 4px solid #b0774c;
+	}
+
+	.vsb-document-type {
+		color: #063c51;
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 1.3px;
+		text-transform: uppercase;
+		margin-bottom: 2px;
+	}
+
+	.vsb-document-number {
+		color: #172126;
+		font-size: 15px;
+		font-weight: 700;
+		margin-bottom: 10px;
+	}
+
+	.vsb-info-row {
+		margin-top: 3px;
+		font-size: 9.5px;
+		line-height: 1.45;
+	}
+
+	.vsb-info-label {
+		color: #7b8589;
+		display: inline-block;
+		min-width: 53px;
+	}
+
+	.vsb-info-value {
+		color: #29363b;
+		font-weight: 500;
+	}
+
+	/* =========================
+	   CONTATOS
+	   ========================= */
+
+	.vsb-contact-bar {
+		border-top: 1px solid #e3eaed;
+		padding: 8px 20px;
+		background: #ffffff;
+		font-size: 9px;
+		color: #505f62;
+	}
+
+	.vsb-contact-table {
+		width: 100%;
+		border-collapse: collapse;
+	}
+
+	.vsb-contact-table td {
+		vertical-align: middle;
+	}
+
+	.vsb-contact-left {
+		text-align: left;
+	}
+
+	.vsb-contact-center {
+		text-align: center;
+	}
+
+	.vsb-contact-right {
+		text-align: right;
+	}
+
+	.vsb-contact-label {
+		color: #9a6b49;
+		font-weight: 700;
+		margin-right: 3px;
+	}
+
+	/* Impressão / PDF */
+	@media print {
+		.vsb-header {
+			box-shadow: none !important;
+		}
+	}
+</style>
+
+{% set company_info = frappe.db.get_value(
+	"Company",
+	doc.company,
+	["company_logo", "website", "email", "phone_no", "tax_id"],
+	as_dict=True
+) %}
+
+{% if doc.company_address %}
+	{% set company_address = frappe.db.get_value(
+		"Address",
+		doc.company_address,
+		["address_line1", "address_line2", "city", "state", "pincode", "country"],
+		as_dict=True
+	) %}
+{% elif doc.billing_address %}
+	{% set company_address = frappe.db.get_value(
+		"Address",
+		doc.billing_address,
+		["address_line1", "address_line2", "city", "state", "pincode", "country"],
+		as_dict=True
+	) %}
+{% endif %}
+
+{% set doc_date = doc.get("transaction_date") or doc.get("posting_date") %}
+
+{% if doc.doctype == "Quotation" %}
+	{% set document_label = "ORÇAMENTO" %}
+{% elif doc.doctype == "Sales Order" %}
+	{% set document_label = "PEDIDO DE VENDA" %}
+{% elif doc.doctype == "Sales Invoice" %}
+	{% set document_label = "NOTA / FATURA" %}
+{% else %}
+	{% set document_label = doc.doctype %}
+{% endif %}
+
+
+<div class="vsb-header">
+
+	<table class="vsb-header-table">
+		<tbody>
+			<tr>
+
+				<!-- LOGO -->
+				<td class="vsb-logo-cell">
+
+					{% if company_info and company_info.company_logo %}
+
+					<div class="vsb-logo">
+						<img
+							src="{{ frappe.utils.get_url(company_info.company_logo) }}"
+							alt="{{ doc.company }}"
+						>
+					</div>
+
+					{% endif %}
+
+				</td>
+
+
+				<!-- EMPRESA -->
+				<td class="vsb-company-cell">
+
+					<div class="vsb-company-name">
+						{{ doc.company }}
+					</div>
+
+					{% if company_address %}
+
+					<div class="vsb-company-address">
+
+						{% if company_address.address_line1 %}
+							{{ company_address.address_line1 }}
+						{% endif %}
+
+						{% if company_address.address_line2 %}
+							<br>{{ company_address.address_line2 }}
+						{% endif %}
+
+						{% if company_address.city %}
+							<br>{{ company_address.city }}
+						{% endif %}
+
+						{% if company_address.state %}
+							- {{ company_address.state }}
+						{% endif %}
+
+						{% if company_address.pincode %}
+							&nbsp; • &nbsp;CEP {{ company_address.pincode }}
+						{% endif %}
+
+					</div>
+
+					{% endif %}
+
+
+					{% if company_info and company_info.tax_id %}
+					<div class="vsb-company-tax">
+						CNPJ: {{ company_info.tax_id }}
+					</div>
+					{% endif %}
+
+				</td>
+
+
+				<!-- DOCUMENTO -->
+				<td class="vsb-document-cell">
+
+					<div class="vsb-document-type">
+						{{ document_label }}
+					</div>
+
+					<div class="vsb-document-number">
+						{{ doc.name }}
+					</div>
+
+
+					{% if doc_date %}
+					<div class="vsb-info-row">
+						<span class="vsb-info-label">
+							Emissão:
+						</span>
+
+						<span class="vsb-info-value">
+							{{ frappe.utils.formatdate(doc_date, "dd/MM/yyyy") }}
+						</span>
+					</div>
+					{% endif %}
+
+
+					{% if doc.get("valid_till") %}
+					<div class="vsb-info-row">
+
+						<span class="vsb-info-label">
+							Validade:
+						</span>
+
+						<span class="vsb-info-value">
+							{{ frappe.utils.formatdate(doc.valid_till, "dd/MM/yyyy") }}
+						</span>
+
+					</div>
+					{% endif %}
+
+				</td>
+
+			</tr>
+		</tbody>
+	</table>
+
+
+	<!-- CONTATOS -->
+	<div class="vsb-contact-bar">
+
+		<table class="vsb-contact-table">
+			<tbody>
+				<tr>
+
+					<td class="vsb-contact-left">
+
+						{% if company_info and company_info.website %}
+
+							<span class="vsb-contact-label">
+								SITE
+							</span>
+
+							{{ company_info.website }}
+
+						{% endif %}
+
+					</td>
+
+
+					<td class="vsb-contact-center">
+
+						{% if company_info and company_info.email %}
+
+							<span class="vsb-contact-label">
+								E-MAIL
+							</span>
+
+							{{ company_info.email }}
+
+						{% endif %}
+
+					</td>
+
+
+					<td class="vsb-contact-right">
+
+						{% if company_info and company_info.phone_no %}
+
+							<span class="vsb-contact-label">
+								CONTATO
+							</span>
+
+							{{ company_info.phone_no }}
+
+						{% endif %}
+
+					</td>
+
+				</tr>
+			</tbody>
+		</table>
+
+	</div>
+
+</div>

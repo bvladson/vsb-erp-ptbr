@@ -1,0 +1,484 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Prévia</title>
+<style>
+  body { background: #eee; margin: 0; padding: 24px; font-family: Inter, "Segoe UI", sans-serif; }
+  .print-format { background: #fff; width: 210mm; margin: 0 auto; padding: 15mm; box-sizing: border-box;
+                   font-size: 14px; line-height: 21px; }
+  .lh { border: 1px dashed #bbb; color: #999; text-align: center; padding: 28px 0; }
+  table { border-collapse: collapse; }
+</style></head><body><div class="print-format">
+<div class="vsb-page">
+	<div >
+		
+<div class="letter-head"><div class="lh">[papel timbrado VSB]</div></div>
+
+
+	</div>
+
+	<style>
+		.vsb-page {
+			font-family: Arial, Helvetica, sans-serif;
+			color: #29363b;
+			font-size: 10px;
+			line-height: 1.5;
+		}
+
+		/*
+		 * ATENÇÃO — esta regra também define as margens do PDF, não só o visual:
+		 * frappe/utils/pdf.py lê margin-top/bottom/left/right das regras
+		 * ".print-format" e as passa ao wkhtmltopdf.
+		 * NÃO declarar margin-top nem margin-bottom aqui. Sem elas, o wkhtmltopdf
+		 * mede o papel timbrado e o rodapé e reserva o espaço exato. Declarando,
+		 * duas coisas quebram: o espaço deixa de acompanhar a altura real do
+		 * timbrado e, porque o gerador embrulha o cabeçalho e o rodapé em outro
+		 * ".print-format" (templates/print_formats/pdf_header_footer.html) com
+		 * este mesmo CSS, a margem empurra o timbrado para fora da página.
+		 */
+		.print-format {
+			padding: 0 !important;
+			margin-left: 0mm !important;
+			margin-right: 0mm !important;
+			font-family: Arial, Helvetica, sans-serif;
+			color: #29363b;
+		}
+
+		.vsb-body {
+			padding: 0 12px !important;
+		}
+
+		.vsb-page .letter-head-footer {
+			margin-top: 0 !important;
+		}
+
+		/* Situação do documento */
+		.vsb-status {
+			margin: 0 0 12px 0;
+			padding: 6px 12px;
+			border-radius: 8px;
+			font-size: 10px;
+			font-weight: 700;
+			letter-spacing: 1.2px;
+			text-transform: uppercase;
+			text-align: center;
+		}
+		.vsb-status-draft {
+			background: #fdf4e7;
+			border: 1px solid #e8cfa9;
+			color: #9a6b49;
+		}
+		.vsb-status-cancelled {
+			background: #fbeceb;
+			border: 1px solid #e8bdb9;
+			color: #9d3b33;
+		}
+		.vsb-status-return {
+			background: #eef4f7;
+			border: 1px solid #c9dbe2;
+			color: #063c51;
+		}
+
+		/* Blocos */
+		.vsb-card {
+			border: 1px solid #dce5e8;
+			border-radius: 12px;
+			overflow: hidden;
+			margin-bottom: 12px;
+		}
+
+		.vsb-section-label {
+			color: #9a6b49;
+			font-size: 8.5px;
+			font-weight: 700;
+			letter-spacing: 1.2px;
+			text-transform: uppercase;
+			margin-bottom: 5px;
+		}
+
+		/* Cliente / fornecedor */
+		.vsb-party-table {
+			width: 100%;
+			border-collapse: collapse;
+			table-layout: fixed;
+		}
+		.vsb-page .vsb-party-table > tbody > tr > td {
+			padding: 13px 16px !important;
+			vertical-align: top;
+			border: none !important;
+		}
+		.vsb-party-divider {
+			border-left: 1px solid #e7edef !important;
+		}
+		.vsb-party-name {
+			color: #063c51;
+			font-size: 12px;
+			font-weight: 700;
+			line-height: 1.3;
+		}
+		.vsb-party-doc {
+			color: #7b8589;
+			font-size: 9px;
+			margin-top: 2px;
+		}
+		.vsb-party-text {
+			color: #505f62;
+			font-size: 9.5px;
+			line-height: 1.55;
+			margin-top: 5px;
+		}
+		.vsb-party-row {
+			font-size: 9.5px;
+			line-height: 1.6;
+		}
+		.vsb-party-row-label {
+			color: #7b8589;
+			display: inline-block;
+			min-width: 52px;
+		}
+
+		/* Detalhes: pedido do cliente, entrega, transporte */
+		.vsb-details-table {
+			width: 100%;
+			border-collapse: collapse;
+			table-layout: fixed;
+		}
+		.vsb-page .vsb-details-table > tbody > tr > td {
+			padding: 11px 16px !important;
+			vertical-align: top;
+			border: none !important;
+		}
+		.vsb-page .vsb-details-table > tbody > tr + tr > td {
+			border-top: 1px solid #eef3f4 !important;
+		}
+		.vsb-details-value {
+			color: #29363b;
+			font-size: 9.5px;
+			line-height: 1.55;
+		}
+
+		/* Itens */
+		.vsb-items {
+			width: 100%;
+			border-collapse: collapse;
+			table-layout: fixed;
+		}
+		.vsb-items thead td {
+			background: #f4f7f8;
+			color: #063c51;
+			font-size: 8.5px;
+			font-weight: 700;
+			letter-spacing: 0.8px;
+			text-transform: uppercase;
+			padding: 9px 10px !important;
+			border-bottom: 1px solid #dce5e8 !important;
+			height: auto !important;
+			white-space: nowrap;
+		}
+		.vsb-page .vsb-items tbody td {
+			padding: 9px 10px !important;
+			border-bottom: 1px solid #eef3f4 !important;
+			vertical-align: top;
+			height: auto !important;
+			font-size: 9.5px;
+		}
+		.vsb-items tbody tr:last-child td {
+			border-bottom: none !important;
+		}
+		.vsb-item-name {
+			color: #172126;
+			font-weight: 700;
+		}
+		.vsb-item-code {
+			color: #7b8589;
+			font-size: 8.5px;
+			margin-top: 1px;
+		}
+		.vsb-item-desc {
+			color: #5d686c;
+			font-size: 8.5px;
+			margin-top: 3px;
+			line-height: 1.45;
+		}
+		/* Mini-tabela do item (imagem + texto): table em vez de float, que o wkhtmltopdf trata melhor.
+		   Sem width:100% o wkhtmltopdf encolhe a tabela e quebra o nome do item sem precisar. */
+		.vsb-item-img {
+			width: 100%;
+			border: none !important;
+			padding: 0 !important;
+			margin: 0 !important;
+			border-collapse: collapse;
+		}
+		.vsb-page .vsb-item-img td {
+			border: none !important;
+			padding: 0 !important;
+			vertical-align: top !important;
+			height: auto !important;
+		}
+		.vsb-thumb {
+			display: block;
+			border-radius: 5px;
+			height: 24px;
+			width: 24px !important;
+			margin-right: 8px;
+			object-fit: cover;
+		}
+
+		.vsb-col-num { width: 24px; }
+		.vsb-col-qty { width: 56px; }
+		.vsb-col-price { width: 92px; }
+		.vsb-col-total { width: 92px; }
+
+		/* Totais */
+		.vsb-bottom {
+			width: 100%;
+			border-collapse: collapse;
+			table-layout: fixed;
+		}
+		.vsb-page .vsb-bottom > tbody > tr > td {
+			padding: 0 !important;
+			vertical-align: top;
+			border: none !important;
+		}
+		.vsb-bottom-left { padding-right: 12px !important; }
+		.vsb-bottom-right { width: 265px; }
+
+		.vsb-totals {
+			width: 100%;
+			border-collapse: collapse;
+		}
+		.vsb-page .vsb-totals td {
+			padding: 6px 14px !important;
+			border: none !important;
+			font-size: 9.5px;
+			height: auto !important;
+		}
+		.vsb-totals .vsb-t-label {
+			color: #7b8589;
+			text-align: right;
+		}
+		.vsb-totals .vsb-t-value {
+			color: #29363b;
+			text-align: right;
+			white-space: nowrap;
+			width: 96px;
+		}
+		.vsb-totals tr.vsb-t-line td {
+			border-bottom: 1px solid #eef3f4 !important;
+		}
+		.vsb-grand {
+			background: #063c51;
+		}
+		.vsb-page .vsb-grand td {
+			padding: 10px 14px !important;
+			color: #ffffff !important;
+		}
+		.vsb-grand .vsb-t-label {
+			color: #cfe0e6 !important;
+			font-size: 9px;
+			font-weight: 700;
+			letter-spacing: 1.1px;
+			text-transform: uppercase;
+		}
+		.vsb-grand .vsb-t-value {
+			color: #ffffff !important;
+			font-size: 13px;
+			font-weight: 700;
+		}
+		.vsb-rounded {
+			background: #f4f7f8;
+		}
+		.vsb-page .vsb-rounded td {
+			border-top: 1px solid #dce5e8 !important;
+			font-size: 9px;
+		}
+		.vsb-rounded .vsb-t-label { color: #9a6b49; font-weight: 700; }
+		.vsb-rounded .vsb-t-value { color: #172126; font-weight: 700; }
+
+		/* Borda fina e uniforme: com borda grossa de um lado só o wkhtmltopdf desenha
+		   sobras do canto arredondado. O destaque vem do fundo e do rótulo em cobre. */
+		.vsb-words {
+			border: 1px solid #e6d9cb;
+			border-radius: 10px;
+			padding: 11px 14px;
+			background: #fdfaf6;
+		}
+		.vsb-words-text {
+			color: #172126;
+			font-size: 10px;
+			font-weight: 700;
+			line-height: 1.5;
+			word-wrap: break-word;
+		}
+
+		/* Condições e termos */
+		.vsb-notes {
+			padding: 12px 16px;
+		}
+		.vsb-notes-text {
+			color: #505f62;
+			font-size: 9px;
+			line-height: 1.6;
+		}
+		.vsb-notes-text p { margin: 0 0 5px 0; }
+		.vsb-notes-text table { width: 100%; border-collapse: collapse; }
+
+		.vsb-pay-table {
+			width: 100%;
+			border-collapse: collapse;
+		}
+		.vsb-page .vsb-pay-table td,
+		.vsb-page .vsb-pay-table th {
+			padding: 5px 0 !important;
+			border: none !important;
+			border-bottom: 1px solid #eef3f4 !important;
+			font-size: 9px;
+			text-align: left;
+			height: auto !important;
+		}
+		.vsb-pay-table thead td {
+			color: #7b8589;
+			font-size: 8.5px;
+			letter-spacing: 0.8px;
+			text-transform: uppercase;
+		}
+		.vsb-pay-table tr:last-child td { border-bottom: none !important; }
+
+		/* Assinaturas */
+		.vsb-accept {
+			margin-top: 16px;
+			width: 100%;
+			border-collapse: collapse;
+			table-layout: fixed;
+		}
+		.vsb-page .vsb-accept td {
+			padding: 0 !important;
+			border: none !important;
+			vertical-align: top;
+		}
+		.vsb-sign {
+			border-top: 1px solid #b9c7cc;
+			margin-top: 34px;
+			padding-top: 5px;
+			color: #7b8589;
+			font-size: 8.5px;
+			text-align: center;
+		}
+		.vsb-accept-gap { width: 28px; }
+
+		/*
+		 * Atenção: as classes da paginação do rodapé do papel timbrado não podem ser
+		 * redefinidas aqui, senão o rodapé muda de tamanho e de cor. Quem pagina é ele.
+		 */
+	</style>
+
+	<div class="vsb-body"><div class="vsb-card">
+			<table class="vsb-party-table">
+				<tr>
+					<td>
+						<div class="vsb-section-label">Cliente</div>
+						<div class="vsb-party-name">MAG MOVEIS CORPORATIVOS</div>
+						
+						
+							<div class="vsb-party-text">Rua travessa sargento portugal 64<br>Av dom manuel, 1180<br>Fortaleza - Ceará &nbsp;•&nbsp; CEP 60850-520</div>
+						
+					</td>
+
+					
+					<td class="vsb-party-divider">
+						<div class="vsb-section-label">Contato</div>
+						
+						<div class="vsb-party-row"><span class="vsb-party-row-label">Nome</span>Carlos</div>
+						
+						
+						<div class="vsb-party-row"><span class="vsb-party-row-label">Telefone</span>+55 85 90000-0000</div>
+						
+						
+						<div class="vsb-party-row"><span class="vsb-party-row-label">E-mail</span>contato@exemplo.com.br</div>
+						
+					</td>
+					
+				</tr>
+			</table>
+		</div>
+		<div class="vsb-card">
+			<table class="vsb-items">
+				<thead>
+					<tr>
+						<td class="vsb-col-num" style="text-align: center">Nº</td>
+						<td>Descrição</td>
+						<td class="vsb-col-qty" style="text-align: right">Qtd.</td>
+						<td class="vsb-col-price" style="text-align: right">Preço unit.</td>
+						<td class="vsb-col-total" style="text-align: right">Total</td>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td class="vsb-col-num" style="text-align: center; color: #7b8589">1</td>
+						<td>
+							<div class="vsb-item-name">0001 - radio comunicador baofeng</div>
+							
+							
+							
+							
+						</td>
+						<td class="vsb-col-qty" style="text-align: right; white-space: nowrap">1 UN</td>
+						<td class="vsb-col-price" style="text-align: right; white-space: nowrap">R$ 350,00</td>
+						<td class="vsb-col-total" style="text-align: right; white-space: nowrap">R$ 350,00</td>
+					</tr>
+					
+				</tbody>
+			</table>
+		</div><table class="vsb-bottom">
+			<tr>
+				<td class="vsb-bottom-left">
+					
+					<div class="vsb-words">
+						<div class="vsb-section-label">Valor total por extenso</div>
+						<div class="vsb-words-text">Quatrocentos e dezesseis reais e cinquenta centavos</div>
+					</div>
+					
+				</td>
+				<td class="vsb-bottom-right">
+					<div class="vsb-card" style="margin-bottom: 0">
+						<table class="vsb-totals">
+							<tr class="vsb-t-line">
+								<td class="vsb-t-label">Subtotal</td>
+								<td class="vsb-t-value">R$ 350,00</td>
+							</tr><tr class="vsb-t-line">
+									<td class="vsb-t-label">ICMS 19%</td>
+									<td class="vsb-t-value">R$ 66,50</td>
+								</tr><tr class="vsb-grand">
+								<td class="vsb-t-label">Total geral</td>
+								<td class="vsb-t-value">R$ 416,50</td>
+							</tr></table>
+					</div>
+				</td>
+			</tr>
+		</table>
+		<div class="vsb-card" style="margin-top: 12px">
+			<div class="vsb-notes">
+				<div class="vsb-section-label">Condições de pagamento</div>
+				<table class="vsb-pay-table">
+					<thead>
+						<tr>
+							<td>Parcela</td>
+							<td>Vencimento</td>
+							<td style="text-align: right">Valor</td>
+						</tr>
+					</thead>
+					<tbody>
+						
+						<tr>
+							<td>Parcela 1</td>
+							<td>30/10/2026</td>
+							<td style="text-align: right; white-space: nowrap">R$ 416,50</td>
+						</tr>
+						
+					</tbody>
+				</table>
+			</div>
+		</div>
+		
+	</div><div >
+		
+	</div>
+</div>
+</div></body></html>

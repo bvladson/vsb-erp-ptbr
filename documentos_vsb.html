@@ -1,0 +1,820 @@
+{#-
+	DOCUMENTOS VSB — formato de impressão em português do Brasil para:
+	  • Pedido de Venda (Sales Order)
+	  • Fatura de Venda (Sales Invoice)
+	  • Guia de Remessa (Delivery Note)
+	  • Pedido de Compra (Purchase Order)
+	ERPNext v16. O MESMO arquivo é instalado nos quatro formatos; ele se adapta ao tipo
+	de documento (doc.doctype).
+
+	É a mesma família visual do "Orçamento VSB" e acompanha o papel timbrado
+	"VSB TEMPLET - PERSONALIZADO", que já imprime logo, empresa, endereço, o nome do
+	documento, o número, a emissão, o vencimento (faturas) e os contatos. O corpo não
+	repete nada disso.
+
+	Corrige os mesmos defeitos dos formatos padrão "... with Item Image" do v16:
+	- rótulos fixos em inglês ("Customer Name:", "Bill to:", "Invoice Date:"...);
+	- chaves de tradução com dois-pontos ("Order Date:", "Grand Total:"...), que não
+	  existem no pt-BR;
+	- _("No") virando "Não" (negação) na coluna de número;
+	- valor por extenso em português de Portugal ("dezasseis"), do total arredondado.
+
+	E trata o que é próprio de cada documento: fornecedor no pedido de compra, local e
+	previsão de entrega, pedido do cliente, transporte na guia, devolução, e os impostos
+	de compra que só entram no custo do estoque ("Valuation") ou que são deduzidos.
+
+	A linha dos itens usa net_rate/net_amount, como o "Orçamento VSB" e os formatos
+	oficiais do ERPNext.
+-#}
+
+{%- macro add_header(page_num, max_pages, doc, letter_head, no_letterhead, footer, print_settings=None, print_heading_template=None) -%}
+{% if letter_head and not no_letterhead %}
+<div class="letter-head">{{ letter_head }}</div>
+{% endif %}
+{% if print_heading_template %}
+{{ frappe.render_template(print_heading_template, {"doc":doc}) }}
+{% endif %}
+{%- endmacro -%}
+
+{#- Número de 0 a 999 por extenso (masculino, pt-BR). -#}
+{%- macro vsb_extenso_ate_999(n) -%}
+{%- set unidades = ["", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez", "onze", "doze", "treze", "quatorze", "quinze", "dezesseis", "dezessete", "dezoito", "dezenove"] -%}
+{%- set dezenas = ["", "", "vinte", "trinta", "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa"] -%}
+{%- set centenas = ["", "cento", "duzentos", "trezentos", "quatrocentos", "quinhentos", "seiscentos", "setecentos", "oitocentos", "novecentos"] -%}
+{%- set c = n // 100 -%}
+{%- set r = n % 100 -%}
+{%- set resto = unidades[r] if r < 20 else dezenas[r // 10] ~ (" e " ~ unidades[r % 10] if r % 10 else "") -%}
+{%- if n == 100 -%}cem
+{%- elif c and r -%}{{ centenas[c] ~ " e " ~ resto }}
+{%- elif c -%}{{ centenas[c] }}
+{%- else -%}{{ resto }}
+{%- endif -%}
+{%- endmacro -%}
+
+{#-
+	Inteiro por extenso, até 999 bilhões. Entre as classes usa vírgula; usa "e" antes do
+	último grupo quando ele é menor que 100 ou centena redonda ("mil e cem",
+	"mil, cento e dezesseis", "um milhão e duzentos mil").
+-#}
+{%- macro vsb_extenso_inteiro(n) -%}
+{%- set grupos = [
+	((n // 1000000000) % 1000, "bilhão", "bilhões"),
+	((n // 1000000) % 1000, "milhão", "milhões"),
+	((n // 1000) % 1000, "mil", "mil"),
+	(n % 1000, "", "")
+] -%}
+{%- for valor, singular, plural in grupos if valor -%}
+	{%- if singular == "mil" and valor == 1 -%}
+		{%- set texto = "mil" -%}
+	{%- elif singular -%}
+		{%- set texto = vsb_extenso_ate_999(valor) ~ " " ~ (singular if valor == 1 else plural) -%}
+	{%- else -%}
+		{%- set texto = vsb_extenso_ate_999(valor) -%}
+	{%- endif -%}
+	{%- if loop.first -%}{{ texto }}
+	{%- elif loop.last and (valor < 100 or valor % 100 == 0) -%}{{ " e " ~ texto }}
+	{%- else -%}{{ ", " ~ texto }}
+	{%- endif -%}
+{%- endfor -%}
+{%- endmacro -%}
+
+{#- Valor em reais por extenso: "quatrocentos e dezesseis reais e cinquenta centavos". -#}
+{%- macro vsb_extenso_reais(valor) -%}
+{%- set total_centavos = (((valor or 0) | float | abs) * 100) | round | int -%}
+{%- set reais = total_centavos // 100 -%}
+{%- set centavos = total_centavos % 100 -%}
+{%- set parte_reais = "" -%}
+{%- if reais -%}
+	{%- set parte_reais = vsb_extenso_inteiro(reais) ~ (" de" if reais % 1000000 == 0 else "") ~ (" real" if reais == 1 else " reais") -%}
+{%- endif -%}
+{%- set parte_centavos = "" -%}
+{%- if centavos -%}
+	{%- set parte_centavos = vsb_extenso_ate_999(centavos) ~ (" centavo" if centavos == 1 else " centavos") -%}
+{%- endif -%}
+{%- if reais and centavos -%}{{ parte_reais ~ " e " ~ parte_centavos }}
+{%- elif reais -%}{{ parte_reais }}
+{%- elif centavos -%}{{ parte_centavos }}
+{%- else -%}zero reais
+{%- endif -%}
+{%- endmacro -%}
+
+{#-
+	Endereço de um cadastro de Endereço, no formato brasileiro:
+	"Rua, nº<br>Complemento<br>Cidade - UF • CEP 00000-000", e o país só fora do Brasil.
+-#}
+{%- macro vsb_endereco(nome) -%}
+{%- set e = frappe.db.get_value("Address", nome, ["address_line1", "address_line2", "city", "state", "pincode", "country"], as_dict=True) if nome else None -%}
+{%- if e -%}
+	{%- set cidade_uf = [e.city, e.state] | select | join(" - ") -%}
+	{%- set cep = ("CEP " ~ e.pincode) if e.pincode else "" -%}
+	{%- set localidade = [cidade_uf, cep] | select | join(" &nbsp;•&nbsp; ") -%}
+	{%- set pais = _(e.country) if e.country and e.country != "Brazil" else "" -%}
+	{{- [e.address_line1, e.address_line2, localidade, pais] | select | join("<br>") -}}
+{%- endif -%}
+{%- endmacro -%}
+
+{#- Unidades padrão do ERPNext (em inglês) → sigla brasileira. As demais saem como cadastradas. -#}
+{%- set vsb_unidades = {
+	"Unit": "UN", "Nos": "UN", "Each": "UN", "Unidade": "UN", "Piece": "PÇ", "Box": "CX",
+	"Pair": "PAR", "Set": "CJ", "Meter": "M", "Square Meter": "M²", "Cubic Meter": "M³",
+	"Centimeter": "CM", "Millimeter": "MM", "Kg": "KG", "Gram": "G", "Litre": "L",
+	"Hour": "H", "Day": "DIA", "Month": "MÊS"
+} -%}
+
+{#- Faixa de documento cancelado, com a concordância de cada nome (pedido/fatura/guia). -#}
+{%- set vsb_cancelado = {
+	"Sales Order": "Pedido de venda cancelado",
+	"Sales Invoice": "Fatura cancelada",
+	"Delivery Note": "Guia de remessa cancelada",
+	"Purchase Order": "Pedido de compra cancelado"
+}.get(doc.doctype, "Documento cancelado") -%}
+
+{#-
+	A classe "page-break" do ERPNext é "page-break-after: always". Aplicada também no
+	último bloco, ela forçava uma quebra depois do fim do documento e o PDF terminava
+	com uma página em branco (só com o timbrado e o rodapé). Ela só entra entre blocos.
+-#}
+{% for page in layout %}
+<div class="{% if not loop.last %}page-break {% endif %}vsb-page">
+	<div {% if print_settings.repeat_header_footer %} id="header-html" class="hidden-pdf" {% endif %}>
+		{{ add_header(loop.index, layout|len, doc, letter_head, no_letterhead, footer, print_settings) }}
+	</div>
+
+	<style>
+		.vsb-page {
+			font-family: Arial, Helvetica, sans-serif;
+			color: #29363b;
+			font-size: 10px;
+			line-height: 1.5;
+		}
+
+		/*
+		 * ATENÇÃO — esta regra também define as margens do PDF, não só o visual:
+		 * frappe/utils/pdf.py lê margin-top/bottom/left/right das regras
+		 * ".print-format" e as passa ao wkhtmltopdf.
+		 * NÃO declarar margin-top nem margin-bottom aqui. Sem elas, o wkhtmltopdf
+		 * mede o papel timbrado e o rodapé e reserva o espaço exato. Declarando,
+		 * duas coisas quebram: o espaço deixa de acompanhar a altura real do
+		 * timbrado e, porque o gerador embrulha o cabeçalho e o rodapé em outro
+		 * ".print-format" (templates/print_formats/pdf_header_footer.html) com
+		 * este mesmo CSS, a margem empurra o timbrado para fora da página.
+		 */
+		.print-format {
+			padding: 0 !important;
+			margin-left: 0mm !important;
+			margin-right: 0mm !important;
+			font-family: Arial, Helvetica, sans-serif;
+			color: #29363b;
+		}
+
+		.vsb-body {
+			padding: 0 12px !important;
+		}
+
+		.vsb-page .letter-head-footer {
+			margin-top: 0 !important;
+		}
+
+		/* Situação do documento */
+		.vsb-status {
+			margin: 0 0 12px 0;
+			padding: 6px 12px;
+			border-radius: 8px;
+			font-size: 10px;
+			font-weight: 700;
+			letter-spacing: 1.2px;
+			text-transform: uppercase;
+			text-align: center;
+		}
+		.vsb-status-draft {
+			background: #fdf4e7;
+			border: 1px solid #e8cfa9;
+			color: #9a6b49;
+		}
+		.vsb-status-cancelled {
+			background: #fbeceb;
+			border: 1px solid #e8bdb9;
+			color: #9d3b33;
+		}
+		.vsb-status-return {
+			background: #eef4f7;
+			border: 1px solid #c9dbe2;
+			color: #063c51;
+		}
+
+		/* Blocos */
+		.vsb-card {
+			border: 1px solid #dce5e8;
+			border-radius: 12px;
+			overflow: hidden;
+			margin-bottom: 12px;
+		}
+
+		.vsb-section-label {
+			color: #9a6b49;
+			font-size: 8.5px;
+			font-weight: 700;
+			letter-spacing: 1.2px;
+			text-transform: uppercase;
+			margin-bottom: 5px;
+		}
+
+		/* Cliente / fornecedor */
+		.vsb-party-table {
+			width: 100%;
+			border-collapse: collapse;
+			table-layout: fixed;
+		}
+		.vsb-page .vsb-party-table > tbody > tr > td {
+			padding: 13px 16px !important;
+			vertical-align: top;
+			border: none !important;
+		}
+		.vsb-party-divider {
+			border-left: 1px solid #e7edef !important;
+		}
+		.vsb-party-name {
+			color: #063c51;
+			font-size: 12px;
+			font-weight: 700;
+			line-height: 1.3;
+		}
+		.vsb-party-doc {
+			color: #7b8589;
+			font-size: 9px;
+			margin-top: 2px;
+		}
+		.vsb-party-text {
+			color: #505f62;
+			font-size: 9.5px;
+			line-height: 1.55;
+			margin-top: 5px;
+		}
+		.vsb-party-row {
+			font-size: 9.5px;
+			line-height: 1.6;
+		}
+		.vsb-party-row-label {
+			color: #7b8589;
+			display: inline-block;
+			min-width: 52px;
+		}
+
+		/* Detalhes: pedido do cliente, entrega, transporte */
+		.vsb-details-table {
+			width: 100%;
+			border-collapse: collapse;
+			table-layout: fixed;
+		}
+		.vsb-page .vsb-details-table > tbody > tr > td {
+			padding: 11px 16px !important;
+			vertical-align: top;
+			border: none !important;
+		}
+		.vsb-page .vsb-details-table > tbody > tr + tr > td {
+			border-top: 1px solid #eef3f4 !important;
+		}
+		.vsb-details-value {
+			color: #29363b;
+			font-size: 9.5px;
+			line-height: 1.55;
+		}
+
+		/* Itens */
+		.vsb-items {
+			width: 100%;
+			border-collapse: collapse;
+			table-layout: fixed;
+		}
+		.vsb-items thead td {
+			background: #f4f7f8;
+			color: #063c51;
+			font-size: 8.5px;
+			font-weight: 700;
+			letter-spacing: 0.8px;
+			text-transform: uppercase;
+			padding: 9px 10px !important;
+			border-bottom: 1px solid #dce5e8 !important;
+			height: auto !important;
+			white-space: nowrap;
+		}
+		.vsb-page .vsb-items tbody td {
+			padding: 9px 10px !important;
+			border-bottom: 1px solid #eef3f4 !important;
+			vertical-align: top;
+			height: auto !important;
+			font-size: 9.5px;
+		}
+		.vsb-items tbody tr:last-child td {
+			border-bottom: none !important;
+		}
+		.vsb-item-name {
+			color: #172126;
+			font-weight: 700;
+		}
+		.vsb-item-code {
+			color: #7b8589;
+			font-size: 8.5px;
+			margin-top: 1px;
+		}
+		.vsb-item-desc {
+			color: #5d686c;
+			font-size: 8.5px;
+			margin-top: 3px;
+			line-height: 1.45;
+		}
+		/* Mini-tabela do item (imagem + texto): table em vez de float, que o wkhtmltopdf trata melhor.
+		   Sem width:100% o wkhtmltopdf encolhe a tabela e quebra o nome do item sem precisar. */
+		.vsb-item-img {
+			width: 100%;
+			border: none !important;
+			padding: 0 !important;
+			margin: 0 !important;
+			border-collapse: collapse;
+		}
+		.vsb-page .vsb-item-img td {
+			border: none !important;
+			padding: 0 !important;
+			vertical-align: top !important;
+			height: auto !important;
+		}
+		.vsb-thumb {
+			display: block;
+			border-radius: 5px;
+			height: 24px;
+			width: 24px !important;
+			margin-right: 8px;
+			object-fit: cover;
+		}
+
+		.vsb-col-num { width: 24px; }
+		.vsb-col-qty { width: 56px; }
+		.vsb-col-price { width: 92px; }
+		.vsb-col-total { width: 92px; }
+
+		/* Totais */
+		.vsb-bottom {
+			width: 100%;
+			border-collapse: collapse;
+			table-layout: fixed;
+		}
+		.vsb-page .vsb-bottom > tbody > tr > td {
+			padding: 0 !important;
+			vertical-align: top;
+			border: none !important;
+		}
+		.vsb-bottom-left { padding-right: 12px !important; }
+		.vsb-bottom-right { width: 265px; }
+
+		.vsb-totals {
+			width: 100%;
+			border-collapse: collapse;
+		}
+		.vsb-page .vsb-totals td {
+			padding: 6px 14px !important;
+			border: none !important;
+			font-size: 9.5px;
+			height: auto !important;
+		}
+		.vsb-totals .vsb-t-label {
+			color: #7b8589;
+			text-align: right;
+		}
+		.vsb-totals .vsb-t-value {
+			color: #29363b;
+			text-align: right;
+			white-space: nowrap;
+			width: 96px;
+		}
+		.vsb-totals tr.vsb-t-line td {
+			border-bottom: 1px solid #eef3f4 !important;
+		}
+		.vsb-grand {
+			background: #063c51;
+		}
+		.vsb-page .vsb-grand td {
+			padding: 10px 14px !important;
+			color: #ffffff !important;
+		}
+		.vsb-grand .vsb-t-label {
+			color: #cfe0e6 !important;
+			font-size: 9px;
+			font-weight: 700;
+			letter-spacing: 1.1px;
+			text-transform: uppercase;
+		}
+		.vsb-grand .vsb-t-value {
+			color: #ffffff !important;
+			font-size: 13px;
+			font-weight: 700;
+		}
+		.vsb-rounded {
+			background: #f4f7f8;
+		}
+		.vsb-page .vsb-rounded td {
+			border-top: 1px solid #dce5e8 !important;
+			font-size: 9px;
+		}
+		.vsb-rounded .vsb-t-label { color: #9a6b49; font-weight: 700; }
+		.vsb-rounded .vsb-t-value { color: #172126; font-weight: 700; }
+
+		/* Borda fina e uniforme: com borda grossa de um lado só o wkhtmltopdf desenha
+		   sobras do canto arredondado. O destaque vem do fundo e do rótulo em cobre. */
+		.vsb-words {
+			border: 1px solid #e6d9cb;
+			border-radius: 10px;
+			padding: 11px 14px;
+			background: #fdfaf6;
+		}
+		.vsb-words-text {
+			color: #172126;
+			font-size: 10px;
+			font-weight: 700;
+			line-height: 1.5;
+			word-wrap: break-word;
+		}
+
+		/* Condições e termos */
+		.vsb-notes {
+			padding: 12px 16px;
+		}
+		.vsb-notes-text {
+			color: #505f62;
+			font-size: 9px;
+			line-height: 1.6;
+		}
+		.vsb-notes-text p { margin: 0 0 5px 0; }
+		.vsb-notes-text table { width: 100%; border-collapse: collapse; }
+
+		.vsb-pay-table {
+			width: 100%;
+			border-collapse: collapse;
+		}
+		.vsb-page .vsb-pay-table td,
+		.vsb-page .vsb-pay-table th {
+			padding: 5px 0 !important;
+			border: none !important;
+			border-bottom: 1px solid #eef3f4 !important;
+			font-size: 9px;
+			text-align: left;
+			height: auto !important;
+		}
+		.vsb-pay-table thead td {
+			color: #7b8589;
+			font-size: 8.5px;
+			letter-spacing: 0.8px;
+			text-transform: uppercase;
+		}
+		.vsb-pay-table tr:last-child td { border-bottom: none !important; }
+
+		/* Assinaturas */
+		.vsb-accept {
+			margin-top: 16px;
+			width: 100%;
+			border-collapse: collapse;
+			table-layout: fixed;
+		}
+		.vsb-page .vsb-accept td {
+			padding: 0 !important;
+			border: none !important;
+			vertical-align: top;
+		}
+		.vsb-sign {
+			border-top: 1px solid #b9c7cc;
+			margin-top: 34px;
+			padding-top: 5px;
+			color: #7b8589;
+			font-size: 8.5px;
+			text-align: center;
+		}
+		.vsb-accept-gap { width: 28px; }
+
+		/*
+		 * Atenção: as classes da paginação do rodapé do papel timbrado não podem ser
+		 * redefinidas aqui, senão o rodapé muda de tamanho e de cor. Quem pagina é ele.
+		 */
+	</style>
+
+	<div class="vsb-body">
+		{%- if doc.meta.is_submittable and doc.docstatus == 2 -%}
+			<div class="vsb-status vsb-status-cancelled" document-status="cancelled">{{ vsb_cancelado }}</div>
+		{%- endif -%}
+		{%- if doc.meta.is_submittable and doc.docstatus == 0 and (print_settings == None or print_settings.add_draft_heading) -%}
+			<div class="vsb-status vsb-status-draft" document-status="draft">Rascunho — sujeito a alteração</div>
+		{%- endif -%}
+		{#- Fatura e guia de devolução: sem esta faixa ela sairia igual a uma normal, só com valores negativos. -#}
+		{%- if doc.get("is_return") -%}
+			<div class="vsb-status vsb-status-return">Devolução{% if doc.get("return_against") %} — referente a {{ doc.get("return_against") }}{% endif %}</div>
+		{%- endif -%}
+
+		{#-
+			Cliente (vendas) ou fornecedor (pedido de compra). Os campos variam entre os
+			documentos; doc.get() devolve vazio quando o campo não existe naquele tipo.
+		-#}
+		{%- set compra = doc.doctype == "Purchase Order" -%}
+		{%- set nome_parte = (doc.get("supplier_name") or doc.get("supplier")) if compra else (doc.get("customer_name") or doc.get("customer")) -%}
+		{%- set endereco_link = doc.get("supplier_address") if compra else doc.get("customer_address") -%}
+		{%- set endereco_parte = vsb_endereco(endereco_link) | trim -%}
+		{%- set telefone = doc.get("contact_mobile") or doc.get("contact_phone") -%}
+		{%- set tem_contato = doc.get("contact_display") or telefone or doc.get("contact_email") -%}
+
+		<div class="vsb-card">
+			<table class="vsb-party-table">
+				<tr>
+					<td>
+						<div class="vsb-section-label">{{ "Fornecedor" if compra else "Cliente" }}</div>
+						<div class="vsb-party-name">{{ nome_parte }}</div>
+						{% if doc.get("tax_id") %}<div class="vsb-party-doc">CNPJ/CPF: {{ doc.get("tax_id") }}</div>{% endif %}
+						{% if endereco_parte %}
+							<div class="vsb-party-text">{{ endereco_parte }}</div>
+						{% elif doc.get("address_display") %}
+							<div class="vsb-party-text">{{ doc.get("address_display") }}</div>
+						{% endif %}
+					</td>
+
+					{% if tem_contato %}
+					<td class="vsb-party-divider">
+						<div class="vsb-section-label">Contato</div>
+						{% if doc.get("contact_display") %}
+						<div class="vsb-party-row"><span class="vsb-party-row-label">Nome</span>{{ doc.get("contact_display") }}</div>
+						{% endif %}
+						{% if telefone %}
+						<div class="vsb-party-row"><span class="vsb-party-row-label">Telefone</span>{{ telefone }}</div>
+						{% endif %}
+						{% if doc.get("contact_email") %}
+						<div class="vsb-party-row"><span class="vsb-party-row-label">E-mail</span>{{ doc.get("contact_email") }}</div>
+						{% endif %}
+					</td>
+					{% endif %}
+				</tr>
+			</table>
+		</div>
+
+		{#-
+			Detalhes: só entram os que estiverem preenchidos, em linhas de três.
+			  • pedido do cliente (vendas), previsão de entrega (pedidos);
+			  • local de entrega: nas vendas, o endereço de entrega quando é diferente do
+			    de cobrança; no pedido de compra, o endereço da VSB para onde o fornecedor
+			    deve entregar;
+			  • transporte (guia de remessa).
+		-#}
+		{%- set detalhes = [] -%}
+		{%- if doc.get("po_no") -%}
+			{%- set detalhes = detalhes + [("Pedido do cliente", doc.get("po_no") ~ ((" de " ~ frappe.utils.format_date(doc.get("po_date"))) if doc.get("po_date") else ""))] -%}
+		{%- endif -%}
+		{%- set previsao = doc.get("schedule_date") if compra else doc.get("delivery_date") -%}
+		{%- if previsao -%}
+			{%- set detalhes = detalhes + [("Entrega prevista", frappe.utils.format_date(previsao))] -%}
+		{%- endif -%}
+		{%- if compra -%}
+			{%- set entrega = vsb_endereco(doc.get("shipping_address")) | trim -%}
+			{%- if entrega -%}{%- set detalhes = detalhes + [("Entregar em", entrega)] -%}{%- endif -%}
+		{%- elif doc.get("shipping_address_name") and doc.get("shipping_address_name") != endereco_link -%}
+			{%- set entrega = vsb_endereco(doc.get("shipping_address_name")) | trim -%}
+			{%- if entrega -%}{%- set detalhes = detalhes + [("Local de entrega", entrega)] -%}{%- endif -%}
+		{%- endif -%}
+		{%- if doc.get("transporter_name") -%}
+			{%- set detalhes = detalhes + [("Transportadora", doc.get("transporter_name"))] -%}
+		{%- endif -%}
+		{%- if doc.get("vehicle_no") -%}
+			{%- set detalhes = detalhes + [("Veículo", doc.get("vehicle_no"))] -%}
+		{%- endif -%}
+		{%- if doc.get("driver_name") -%}
+			{%- set detalhes = detalhes + [("Motorista", doc.get("driver_name"))] -%}
+		{%- endif -%}
+		{%- if doc.get("lr_no") -%}
+			{%- set detalhes = detalhes + [("Conhecimento de transporte", doc.get("lr_no") ~ ((" de " ~ frappe.utils.format_date(doc.get("lr_date"))) if doc.get("lr_date") else ""))] -%}
+		{%- endif -%}
+
+		{% if detalhes %}
+		<div class="vsb-card">
+			<table class="vsb-details-table">
+				{% for linha in detalhes | batch(3, ("", "")) %}
+				<tr>
+					{% for rotulo, valor in linha %}
+					<td>
+						{% if rotulo %}
+						<div class="vsb-section-label">{{ rotulo }}</div>
+						<div class="vsb-details-value">{{ valor }}</div>
+						{% endif %}
+					</td>
+					{% endfor %}
+				</tr>
+				{% endfor %}
+			</table>
+		</div>
+		{% endif %}
+
+		{#- Itens -#}
+		{% set item_naming_by = frappe.db.get_single_value("Stock Settings", "item_naming_by") %}
+		<div class="vsb-card">
+			<table class="vsb-items">
+				<thead>
+					<tr>
+						<td class="vsb-col-num" style="text-align: center">Nº</td>
+						<td>Descrição</td>
+						<td class="vsb-col-qty" style="text-align: right">Qtd.</td>
+						<td class="vsb-col-price" style="text-align: right">Preço unit.</td>
+						<td class="vsb-col-total" style="text-align: right">Total</td>
+					</tr>
+				</thead>
+				<tbody>
+					{% for item in doc.items %}
+					{#- A descrição do ERPNext costuma repetir o nome do item; só sai quando acrescenta algo. -#}
+					{%- set desc_limpa = (item.description or "") | striptags | trim -%}
+					{%- set mostrar_desc = desc_limpa and desc_limpa != (item.item_name or "") | trim and desc_limpa != (item.item_code or "") | trim -%}
+					{#- O código só sai quando o nome ainda não o mostra (aqui os itens se chamam "0001 - rádio…"). -#}
+					{%- set mostrar_codigo = item_naming_by == "Item Code" and item.item_code and item.item_code not in (item.item_name or "") -%}
+					{#- No pedido de compra, o código do produto no catálogo do fornecedor, quando cadastrado. -#}
+					{%- set codigo_fornecedor = item.get("supplier_part_no") if compra else None -%}
+					<tr>
+						<td class="vsb-col-num" style="text-align: center; color: #7b8589">{{ loop.index }}</td>
+						<td>
+							{#-
+								A tabela aninhada entra só quando há imagem: sem ela, acrescentava uns
+								7px acima do nome e o item saía mais baixo que a quantidade e os valores.
+							-#}
+							{% if item.image %}
+							<table class="vsb-item-img">
+								<tr>
+									<td style="width: 32px">
+										<img class="vsb-thumb" src="{{ item.image | e }}" alt="{{ item.item_name | e }}" />
+									</td>
+									<td>
+										<div class="vsb-item-name">{{ item.item_name }}</div>
+										{% if mostrar_codigo %}<div class="vsb-item-code">Cód. {{ item.item_code }}</div>{% endif %}
+										{% if codigo_fornecedor %}<div class="vsb-item-code">Cód. fornecedor {{ codigo_fornecedor }}</div>{% endif %}
+										{% if mostrar_desc %}<div class="vsb-item-desc">{{ desc_limpa }}</div>{% endif %}
+									</td>
+								</tr>
+							</table>
+							{% else %}
+							<div class="vsb-item-name">{{ item.item_name }}</div>
+							{% if mostrar_codigo %}<div class="vsb-item-code">Cód. {{ item.item_code }}</div>{% endif %}
+							{% if codigo_fornecedor %}<div class="vsb-item-code">Cód. fornecedor {{ codigo_fornecedor }}</div>{% endif %}
+							{% if mostrar_desc %}<div class="vsb-item-desc">{{ desc_limpa }}</div>{% endif %}
+							{% endif %}
+						</td>
+						<td class="vsb-col-qty" style="text-align: right; white-space: nowrap">{{ item.get_formatted("qty", 0) }} {{ vsb_unidades.get(item.uom, item.uom or "") }}</td>
+						<td class="vsb-col-price" style="text-align: right; white-space: nowrap">{{ item.get_formatted("net_rate", doc) }}</td>
+						<td class="vsb-col-total" style="text-align: right; white-space: nowrap">{{ item.get_formatted("net_amount", doc) }}</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+
+		{#-
+			Por extenso: em reais o texto é gerado aqui, do Total geral impresso. Em outra
+			moeda (ou acima de 999 bilhões) usa o campo in_words do ERPNext.
+		-#}
+		{%- set por_extenso = vsb_extenso_reais(doc.grand_total) if doc.currency == "BRL" and ((doc.grand_total or 0) | abs) < 1000000000000 else (doc.in_words or "") -%}
+		{%- set mostra_arredondado = doc.rounded_total and (doc.rounded_total | float) != (doc.grand_total | float) -%}
+
+		<table class="vsb-bottom">
+			<tr>
+				<td class="vsb-bottom-left">
+					{% if por_extenso %}
+					<div class="vsb-words">
+						<div class="vsb-section-label">Valor total por extenso</div>
+						<div class="vsb-words-text">{{ por_extenso[:1] | upper }}{{ por_extenso[1:] }}</div>
+					</div>
+					{% endif %}
+				</td>
+				<td class="vsb-bottom-right">
+					<div class="vsb-card" style="margin-bottom: 0">
+						<table class="vsb-totals">
+							<tr class="vsb-t-line">
+								<td class="vsb-t-label">Subtotal</td>
+								<td class="vsb-t-value">{{ doc.get_formatted("total", doc) }}</td>
+							</tr>
+
+							{%- if doc.discount_amount and doc.apply_discount_on == "Net Total" -%}
+							<tr class="vsb-t-line">
+								<td class="vsb-t-label">Desconto{% if doc.additional_discount_percentage %} ({{ doc.get_formatted("additional_discount_percentage") }}%){% endif %}</td>
+								<td class="vsb-t-value">− {{ doc.get_formatted("discount_amount", doc) }}</td>
+							</tr>
+							{%- endif -%}
+
+							{%- for tax in doc.taxes -%}
+								{#-
+									Impostos de compra: "Valuation" só entra no custo do estoque, não no
+									total do pedido — por isso não aparece aqui; "Deduct" é subtraído do
+									total, e o ERPNext guarda o valor positivo, então o sinal vem daqui.
+									Nas vendas esses campos não existem e nada muda.
+								-#}
+								{%- set so_custo_estoque = tax.get("category") == "Valuation" -%}
+								{%- if not so_custo_estoque and (tax.tax_amount or print_settings.print_taxes_with_zero_amount) and (not tax.included_in_print_rate or doc.flags.show_inclusive_tax_in_print) -%}
+									{#- A descrição vem como "ICMS 19% @ 19.0"; corta o "@ 19.0" e só acrescenta a alíquota se ela ainda não estiver no texto. -#}
+									{%- set descricao = (tax.description or "") | striptags | replace("&nbsp;", " ") -%}
+									{%- set descricao = descricao.split(" @ ")[0] | trim -%}
+									{%- set aliquota = tax.get_formatted("rate") ~ "%" -%}
+								<tr class="vsb-t-line">
+									<td class="vsb-t-label">{{ descricao }}{% if tax.rate and aliquota not in descricao %} ({{ aliquota }}){% endif %}</td>
+									<td class="vsb-t-value">{{ "− " if tax.get("add_deduct_tax") == "Deduct" else "" }}{{ tax.get_formatted("tax_amount") }}</td>
+								</tr>
+								{%- endif -%}
+							{%- endfor -%}
+
+							{%- if doc.discount_amount and doc.apply_discount_on == "Grand Total" -%}
+							<tr class="vsb-t-line">
+								<td class="vsb-t-label">Desconto{% if doc.additional_discount_percentage %} ({{ doc.get_formatted("additional_discount_percentage") }}%){% endif %}</td>
+								<td class="vsb-t-value">− {{ doc.get_formatted("discount_amount", doc) }}</td>
+							</tr>
+							{%- endif -%}
+
+							<tr class="vsb-grand">
+								<td class="vsb-t-label">Total geral</td>
+								<td class="vsb-t-value">{{ doc.get_formatted("grand_total", doc) }}</td>
+							</tr>
+
+							{%- if mostra_arredondado -%}
+							<tr class="vsb-rounded">
+								<td class="vsb-t-label">Total a pagar (arredondado)</td>
+								<td class="vsb-t-value">{{ doc.get_formatted("rounded_total", doc) }}</td>
+							</tr>
+							{%- endif -%}
+						</table>
+					</div>
+				</td>
+			</tr>
+		</table>
+
+		{#- Condições de pagamento (a guia de remessa não tem parcelas). -#}
+		{% if doc.get("payment_schedule") and doc.get("payment_schedule") | len %}
+		<div class="vsb-card" style="margin-top: 12px">
+			<div class="vsb-notes">
+				<div class="vsb-section-label">Condições de pagamento{% if doc.get("payment_terms_template") %} — {{ doc.get("payment_terms_template") }}{% endif %}</div>
+				<table class="vsb-pay-table">
+					<thead>
+						<tr>
+							<td>Parcela</td>
+							<td>Vencimento</td>
+							<td style="text-align: right">Valor</td>
+						</tr>
+					</thead>
+					<tbody>
+						{% for p in doc.get("payment_schedule") %}
+						<tr>
+							<td>{{ p.description or p.payment_term or ("Parcela " ~ loop.index) }}</td>
+							<td>{{ frappe.utils.format_date(p.due_date) }}</td>
+							<td style="text-align: right; white-space: nowrap">{{ p.get_formatted("payment_amount", doc) }}</td>
+						</tr>
+						{% endfor %}
+					</tbody>
+				</table>
+			</div>
+		</div>
+		{% endif %}
+
+		{#- Termos e condições -#}
+		{% if doc.terms %}
+		<div class="vsb-card" style="margin-top: 12px">
+			<div class="vsb-notes">
+				<div class="vsb-section-label">Termos e condições{% if doc.get("tc_name") %} — {{ doc.get("tc_name") }}{% endif %}</div>
+				<div class="vsb-notes-text">{{ doc.terms }}</div>
+			</div>
+		</div>
+		{% endif %}
+
+		{#-
+			Assinaturas, só no documento válido (nunca em rascunho ou cancelado):
+			  • pedidos de venda e de compra: VSB e o "de acordo" do cliente/fornecedor;
+			  • guia de remessa: o recebimento da mercadoria;
+			  • fatura: nenhuma.
+		-#}
+		{% if doc.docstatus == 1 and doc.doctype in ("Sales Order", "Purchase Order") %}
+		<table class="vsb-accept">
+			<tr>
+				<td>
+					<div class="vsb-sign">{{ doc.company }}</div>
+				</td>
+				<td class="vsb-accept-gap">&nbsp;</td>
+				<td>
+					<div class="vsb-sign">De acordo — {{ nome_parte }}</div>
+				</td>
+			</tr>
+		</table>
+		{% elif doc.docstatus == 1 and doc.doctype == "Delivery Note" and not doc.get("is_return") %}
+		<table class="vsb-accept">
+			<tr>
+				<td>
+					<div class="vsb-sign">Recebido por — nome e documento</div>
+				</td>
+				<td class="vsb-accept-gap">&nbsp;</td>
+				<td>
+					<div class="vsb-sign">Data e assinatura</div>
+				</td>
+			</tr>
+		</table>
+		{% endif %}
+	</div>
+
+	{#- O rodapé do papel timbrado já traz empresa, contatos e a paginação "Página n / N". -#}
+	<div {% if print_settings.repeat_header_footer %} id="footer-html" class="visible-pdf" {% endif %}>
+		{% if not no_letterhead and footer %}
+		<div class="letter-head-footer">{{ footer }}</div>
+		{% endif %}
+	</div>
+</div>
+{% endfor %}
