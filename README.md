@@ -56,3 +56,11 @@ pelo próprio servidor — é a única forma de pegar defeito que só existe no 
 
 Os dados que aparecem nas saídas de teste são fictícios. O contato de exemplo foi
 substituído por `contato@exemplo.com.br`.
+
+---
+
+## Autoria
+
+Projeto meu — concepção, arquitetura, implementação, implantação e operação em produção.
+Durante o desenvolvimento usei assistentes de IA (Codex e Claude) como ferramenta de apoio;
+a condução e as decisões técnicas são minhas.
